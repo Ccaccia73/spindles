@@ -195,24 +195,20 @@ if mat_file ~= 0
 		
 		set(handles.filterSelect,'Enable','on');
 		
-		switch handles.spindles_data.filtername
-			case 'CH05'
-				set(handles.filterSelect,'Value',2);
-			case 'CH10'
-				set(handles.filterSelect,'Value',3);
-			case 'CH20'
-				set(handles.filterSelect,'Value',4);
-			case 'CH40'
-				set(handles.filterSelect,'Value',5);
-			case 'BW03'
-				set(handles.filterSelect,'Value',6);
-			case 'BW05'
-				set(handles.filterSelect,'Value',7);
-			case 'BW20'
-				set(handles.filterSelect,'Value',8);
-			otherwise
+		filters = cellstr(get(handles.filterSelect,'String'));
+		
+		val = find(strncmp(handles.spindles_data.filtername,filters,4),1);
+		
+		if isempty(val)
+			set(handles.filterSelect,'Value',1);
+			set(handles.status_text,'String','No filter in .mat file')
+		else
+			if val >1 && val <12
+				set(handles.filterSelect,'Value',val);
+			else
 				set(handles.filterSelect,'Value',1);
 				set(handles.status_text,'String','No filter in .mat file')
+			end
 		end
 		
 		set(handles.filterApply,'Enable','on');
@@ -248,23 +244,11 @@ function filterSelect_Callback(hObject, eventdata, handles)
 
 val = get(hObject,'value');
 
-switch val
-	case 2
-		handles.spindles_data.filtername = 'CH05';
-	case 3
-		handles.spindles_data.filtername = 'CH10';
-	case 4
-		handles.spindles_data.filtername = 'CH20';
-	case 5
-		handles.spindles_data.filtername = 'CH40';
-	case 6
-		handles.spindles_data.filtername = 'BW03';
-	case 7
-		handles.spindles_data.filtername = 'BW05';
-	case 8
-		handles.spindles_data.filtername = 'BW20';
-	otherwise
-		handles.spindles_data.filtername = '';
+if val > 1 && val < 12
+	contents = cellstr(get(hObject,'String'));
+	handles.spindles_data.filtername = contents{val};
+else
+	handles.spindles_data.filtername = '';
 end
 
 guidata(hObject, handles);
@@ -299,6 +283,12 @@ switch fn
 		handles.spindles_data.filterTF = CH10;
 	case 'CH20'
 		handles.spindles_data.filterTF = CH20;
+	case 'CH25'
+		handles.spindles_data.filterTF = CH25;
+	case 'CH30'
+		handles.spindles_data.filterTF = CH30;
+	case 'CH35'
+		handles.spindles_data.filterTF = CH35;
 	case 'CH40'
 		handles.spindles_data.filterTF = CH40;
 	case 'BW03'
@@ -857,3 +847,13 @@ totVal = sum(handles.spindles_detect{handles.actBehavior});
 
 set(handles.currEpochCount,'String',num2str(currVal));
 set(handles.currBehaviorCount,'String',num2str(totVal));
+
+contents = cellstr(get(handles.spindlesCount,'String'));
+
+val = find(strncmp(num2str(currVal),contents,1),1);
+
+if isempty(val)
+	disp('problema currVal')
+else
+	set(handles.spindlesCount,'Value',val)
+end
