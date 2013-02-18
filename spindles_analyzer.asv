@@ -22,7 +22,7 @@ function varargout = spindles_analyzer(varargin)
 
 % Edit the above text to modify the response to help spindles_analyzer
 
-% Last Modified by GUIDE v2.5 18-Feb-2013 15:38:17
+% Last Modified by GUIDE v2.5 02-Feb-2013 18:49:33
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -810,20 +810,6 @@ set(handles.currEpochCount,'String','0');
 set(handles.currBehaviorCount,'String','0');
 
 
-
-% --- Executes during object creation, after setting all properties.
-function spindlesCount_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to edit8 (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
-
-% Hint: edit controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
-if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-    set(hObject,'BackgroundColor','white');
-end
-
-
 % --- Executes on selection change in spindlesCount.
 function spindlesCount_Callback(hObject, eventdata, handles)
 % hObject    handle to spindlesCount (see GCBO)
@@ -837,14 +823,12 @@ if (handles.actBehavior >= 1 && handles.actBehavior <= 8)
     
     val = str2double(get(hObject,'String'));
     
-    if (~isnan(val) && imag(val) == 0 && mod(val,1) == 0 && val >= 0 )
+    if (~isnan(val) && imag(val) == 0 && mod(val,1) == 0 && val )
         handles.spindles_detect{handles.actBehavior}(handles.currIndex) = val;
         guidata(hObject,handles);
         updateSpindles(handles);
-		set(handles.status_text, 'String','Spindles value OK');
 	else
 		set(handles.status_text, 'String','NOT a valid number for spindles count');
-		updateSpindles(handles);
     end
 end
 
@@ -859,5 +843,3 @@ set(handles.currEpochCount,'String',num2str(currVal));
 set(handles.currBehaviorCount,'String',num2str(totVal));
 
 set(handles.spindlesCount,'String',num2str(currVal));
-
-
