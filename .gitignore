@@ -1,2 +1,4 @@
 .dropbox.*
 .gitignore
+*.asv
+*.pdf
