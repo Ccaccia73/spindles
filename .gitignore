@@ -2,3 +2,5 @@
 .gitignore
 *.asv
 *.pdf
+*.ini
+/docs
