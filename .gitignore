@@ -3,4 +3,5 @@
 *.asv
 *.pdf
 *.ini
+*.mat
 /docs
