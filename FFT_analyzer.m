@@ -1215,14 +1215,12 @@ function spindlesDetect_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
- set(handles.spindlesSummary,'String','');
+set(handles.spindlesSummary,'String','');
 
 nb = length(handles.spindles_data.behavior);
 handles.spindles_data.spindles_detect = cell(nb,1);
 
 for k1=1:nb
-    
-    str =  get(handles.spindlesSummary,'String');
     
     nbx = length(handles.spindles_data.behavior{k1});
     handles.spindles_data.spindles_detect{k1} = zeros(nbx,3);
@@ -1263,7 +1261,7 @@ for k1=1:nb
         end
     end
     
-     set(handles.spindlesSummary,'String',{str,['Behavior ',num2str(k1),' Spindles:',num2str(count(handles.spindles_data.spindles_detect{k1}(1,:)))]});
+    set(handles.spindlesSummary,'String',[get(handles.spindlesSummary,'String');{[num2str(k1),') Sp:',num2str(sum(handles.spindles_data.spindles_detect{k1}(:,1)))]}]);
     
 end
 
