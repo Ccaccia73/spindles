@@ -22,7 +22,7 @@ function varargout = FFT_analyzer(varargin)
 
 % Edit the above text to modify the response to help FFT_analyzer
 
-% Last Modified by GUIDE v2.5 06-Mar-2013 15:31:31
+% Last Modified by GUIDE v2.5 11-Mar-2013 13:57:43
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -65,6 +65,10 @@ handles.x = 0;
 
 handles.yscale = -1;
 handles.ythresh = -1;
+
+handles.fftminscale = 0;
+handles.fftmaxscale = 64;
+handles.sigmathresh = 0;
 
 handles.currIndex = 0;
 
@@ -115,6 +119,7 @@ set(handles.epochText,'String',['current epoch: ',num2str(handles.spindles_data.
 handles.currIndex = val;
 guidata(hObject,handles);
 updateGraphs(handles);
+updateRMSdata(handles);
 
 
 % --- Executes during object creation, after setting all properties.
@@ -381,6 +386,9 @@ handles.spindles_data.filtervolt = filter(handles.spindles_data.filterTF,handles
 set(handles.FFTseconds,'Enable','on');
 set(handles.FFTwindow,'Enable','on');
 set(handles.calcFFT,'Enable','on');
+set(handles.MAsamples,'Enable','on');
+set(handles.RMScalc,'Enable','on');
+
 
 set(handles.status_text,'String',[handles.spindles_data.filtername,' has been applied to raw data'])
 
@@ -416,11 +424,14 @@ if val >= 2 && val <= 9
 		axes(handles.rawfft);
 		cla;
 		axes(handles.filterfft);
-		cla;        
+		cla;
+        axes(handles.rmsaxes);
+        cla;
 		set(handles.rawaxes,'Visible','off');
 		set(handles.filteraxes,'Visible','off');
 		set(handles.rawfft,'Visible','off');
 		set(handles.filterfft,'Visible','off');
+        set(handles.rmsaxes,'Visible','off');
 		return
 	end
 	
@@ -433,6 +444,7 @@ if val >= 2 && val <= 9
 	set(handles.filteraxes,'Visible','on');
 	set(handles.rawfft,'Visible','on');
 	set(handles.filterfft,'Visible','on');
+    set(handles.rmsaxes,'Visible','on');
     
 		
 	if (sliderMax - sliderMin) > 0
@@ -453,6 +465,7 @@ if val >= 2 && val <= 9
 		set(handles.filteraxes,'Visible','on');
 		set(handles.rawfft,'Visible','on');
 		set(handles.filterfft,'Visible','on');
+        set(handles.rmsaxes,'Visible','on');
 	end
 	
 	[h1,m1,s1] = calcTime(handles.spindles_data.behavior{handles.actBehavior}(1));
@@ -461,6 +474,7 @@ if val >= 2 && val <= 9
     handles.currIndex = 1;
     guidata(hObject,handles);
 	updateGraphs(handles);
+    updateRMSdata(handles);
 	
 else
     handles.actBehavior = 0;
@@ -474,10 +488,13 @@ else
     cla;
     axes(handles.filterfft);
     cla;
+    axes(handles.rmsaxes);
+    cla;
 	set(handles.rawaxes,'Visible','off');
 	set(handles.filteraxes,'Visible','off');
 	set(handles.rawfft,'Visible','off');
 	set(handles.filterfft,'Visible','off');
+    set(handles.rmsaxes,'Visible','off');
 	set(handles.selSlider,'Visible','off');
 	set(handles.minEpoch,'String','');
 	set(handles.maxEpoch,'String','');	
@@ -658,11 +675,21 @@ if isfield(handles.spindles_data, 'rawfft')
     x = handles.spindles_data.fft_freq;
     y = handles.spindles_data.rawfft(:,epoch+1);
     plot(x,y)
+    
+    hold on
     % 	% Plot single-sided amplitude spectrum.
     % 	plot(f,2*abs(Y(1:NFFT/2+1)))
     % 	title('Single-Sided Amplitude Spectrum of y(t)')
     xlabel('Frequency (Hz)')
     ylabel('|v_{raw}(f)|')
+    
+    if (get(handles.FFTlim,'Value') )
+        xlim([handles.fftminscale handles.fftmaxscale])
+    else
+        xlim('auto')
+    end
+    
+    hold off
 end
 
 if isfield(handles.spindles_data, 'filtfft')
@@ -671,14 +698,75 @@ if isfield(handles.spindles_data, 'filtfft')
     x = handles.spindles_data.fft_freq;
     y = handles.spindles_data.filtfft(:,epoch+1);
     plot(x,y)
+    
+    hold on
     % 	% Plot single-sided amplitude spectrum.
     % 	plot(f,2*abs(Y(1:NFFT/2+1)))
     % 	title('Single-Sided Amplitude Spectrum of y(t)')
     xlabel('Frequency (Hz)')
     ylabel('|v_{filt}(f)|')
+    
+    if (get(handles.FFTlim,'Value') )
+        xlim([handles.fftminscale handles.fftmaxscale])
+    else
+        xlim('auto')
+    end
+    
+    hold off
 end
 
+if isfield(handles.spindles_data, 'rms')
+    axes(handles.rmsaxes)
+    cla;
+    y = handles.spindles_data.rms(1536*epoch + 1:1536*(epoch+1));
+    plot(handles.x,y)
+    
+    hold on
+    % 	% Plot single-sided amplitude spectrum.
+    % 	plot(f,2*abs(Y(1:NFFT/2+1)))
+    % 	title('Single-Sided Amplitude Spectrum of y(t)')
+    xlabel('t [s]')
+    ylabel('|v_{rms}(t)|')
+    
+    if (get(handles.showExpMean,'Value') )
+        h1 = line([0 12],handles.spindles_data.rms_data.rms_mean_all*[1 1]);
+        set(h1,'Color','y','LineStyle','--','LineWidth',1.2);
+    end
+    
+    if (get(handles.showBehaviorMean,'Value') )
+        h1 = line([0 12],handles.spindles_data.rms_data.rms_behavior(handles.actBehavior,1)*[1 1]);
+        set(h1,'Color','m','LineStyle','--','LineWidth',1.2);
+    end
+    
+    if (get(handles.showEpochMean,'Value') )
+        h1 = line([0 12],handles.spindles_data.rms_data.rms_epoch(epoch+1,1)*[1 1]);
+        set(h1,'Color','g','LineStyle','--','LineWidth',1.2);
+    end
 
+    if (get(handles.showExpThresh,'Value') && handles.sigmathresh > 0 )
+        h1 = line([0 12],(handles.spindles_data.rms_data.rms_mean_all + handles.spindles_data.rms_data.rms_std_all*handles.sigmathresh)*[1 1]);
+        set(h1,'Color','y','LineStyle','--','LineWidth',1.2);
+    end
+    
+    if (get(handles.showBehaviorThresh,'Value') && handles.sigmathresh > 0 )
+        h1 = line([0 12],(handles.spindles_data.rms_data.rms_behavior(handles.actBehavior,1) + handles.spindles_data.rms_data.rms_behavior(handles.actBehavior,2)*handles.sigmathresh)*[1 1]);
+        set(h1,'Color','m','LineStyle','--','LineWidth',1.2);
+    end
+    
+    if (get(handles.showEpochThresh,'Value') && handles.sigmathresh > 0 )
+        h1 = line([0 12],(handles.spindles_data.rms_data.rms_epoch(epoch+1,1) + handles.spindles_data.rms_data.rms_epoch(epoch+1,2)*handles.sigmathresh)*[1 1]);
+        set(h1,'Color','g','LineStyle','--','LineWidth',1.2);
+    end
+    
+    
+%     if (get(handles.FFTlim,'Value') )
+%         xlim([handles.fftminscale handles.fftmaxscale])
+%     else
+%         xlim('auto')
+%     end
+    
+    hold off
+end
 
 % --- Executes on selection change in FFTseconds.
 function FFTseconds_Callback(hObject, eventdata, handles)
@@ -822,3 +910,429 @@ else
         
     guidata(hObject,handles);
 end
+
+
+% --- Executes on button press in FFTlim.
+function FFTlim_Callback(hObject, eventdata, handles)
+% hObject    handle to FFTlim (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of FFTlim
+if get(hObject,'Value')
+    set(handles.minFFTlim,'Enable','on');
+    set(handles.maxFFTlim,'Enable','on');
+else
+    set(handles.minFFTlim,'Enable','off');
+    set(handles.maxFFTlim,'Enable','off');
+end
+
+updateGraphs(handles);
+
+
+function minFFTlim_Callback(hObject, eventdata, handles)
+% hObject    handle to minFFTlim (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of minFFTlim as text
+%        str2double(get(hObject,'String')) returns contents of minFFTlim as a double
+
+
+val = str2double(get(hObject,'String'));
+
+if isnan(val)
+    set(handles.status_text,'String','Please insert a valid numeric value');
+    set(hObject,'String','');
+    handles.fftminscale = 0;
+else
+    if ( val < 0 ) || ( val > 64 ) || ( val >= handles.fftmaxscale )
+      set(handles.status_text,'String','Please set a correct value: 0 to 64Hz and < max');
+      set(hObject,'String','');
+      handles.fftminscale = 0;
+    else
+        set(handles.status_text,'String','Min FFT OK');
+        handles.fftminscale = abs(val);
+        updateGraphs(handles);
+    end
+end
+
+guidata(hObject, handles);
+
+% --- Executes during object creation, after setting all properties.
+function minFFTlim_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to minFFTlim (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function maxFFTlim_Callback(hObject, eventdata, handles)
+% hObject    handle to maxFFTlim (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of maxFFTlim as text
+%        str2double(get(hObject,'String')) returns contents of maxFFTlim as a double
+
+val = str2double(get(hObject,'String'));
+
+if isnan(val)
+    set(handles.status_text,'String','Please insert a valid numeric value');
+    set(hObject,'String','');
+    handles.fftmaxscale = 64;
+else
+    if ( val < 0 ) || ( val > 64 ) || ( val <= handles.fftminscale )
+      set(handles.status_text,'String','Please set a correct value: 0 to 64Hz and > min');
+      set(hObject,'String','');
+      handles.fftmaxscale = 64;
+    else
+        set(handles.status_text,'String','Max FFT OK');
+        handles.fftmaxscale = abs(val);
+        updateGraphs(handles);
+    end
+end
+
+
+guidata(hObject, handles);
+
+
+% --- Executes during object creation, after setting all properties.
+function maxFFTlim_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to maxFFTlim (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on selection change in MAsamples.
+function MAsamples_Callback(hObject, eventdata, handles)
+% hObject    handle to MAsamples (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: contents = cellstr(get(hObject,'String')) returns MAsamples contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from MAsamples
+
+
+% --- Executes during object creation, after setting all properties.
+function MAsamples_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to MAsamples (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: popupmenu controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in RMScalc.
+function RMScalc_Callback(hObject, eventdata, handles)
+% hObject    handle to RMScalc (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+contents = cellstr(get(handles.MAsamples,'String'));
+tmpstr = strtok(contents{get(handles.MAsamples,'Value')},'-');
+
+val = str2double(tmpstr);
+
+if isnan(val)
+    set(handles.status_text,'String','Please select a valid Moving Average value');
+    return
+else
+    if val>1
+        bfilt = ones(val,1)/val;
+        handles.spindles_data.rms = filter(bfilt,1,sqrt(handles.spindles_data.filtervolt.^2));
+    else
+        handles.spindles_data.rms = sqrt(handles.spindles_data.filtervolt.^2);
+    end
+        
+    handles.spindles_data.rms_data.rms_mean_all = mean(handles.spindles_data.rms);
+    handles.spindles_data.rms_data.rms_std_all = std(handles.spindles_data.rms);
+    
+    ntot = 0;
+    
+    for k1=1:length(handles.spindles_data.behavior)
+        ntot = ntot + length(handles.spindles_data.behavior{k1});
+    end
+    
+    handles.spindles_data.rms_data.rms_epoch = zeros(ntot,2);
+    handles.spindles_data.rms_data.rms_behavior = zeros(length(handles.spindles_data.behavior),2);
+    
+    for k1=1:length(handles.spindles_data.behavior)
+        
+        
+        tmp_rms_behavior = [];
+        
+        for k2=1:length(handles.spindles_data.behavior{k1})
+            act_epoch = handles.spindles_data.behavior{k1}(k2);
+            
+            tmpdata = handles.spindles_data.rms(1536*act_epoch + 1:1536*(act_epoch+1));
+            
+            tmp_rms_behavior = vertcat(tmp_rms_behavior,tmpdata);
+            
+            handles.spindles_data.rms_data.rms_epoch(act_epoch+1,1) = mean(tmpdata);
+            handles.spindles_data.rms_data.rms_epoch(act_epoch+1,2) = std(tmpdata);
+            
+        end
+        
+        handles.spindles_data.rms_data.rms_behavior(k1,1) = mean(tmp_rms_behavior);
+        handles.spindles_data.rms_data.rms_behavior(k1,2) = std(tmp_rms_behavior);
+        
+    end
+    
+    updateGraphs(handles);
+    
+    set(handles.miExp,'Visible','on');
+    set(handles.miBehav,'Visible','on');
+    set(handles.miEpoch,'Visible','on');
+    set(handles.sigmaExp,'Visible','on');
+    set(handles.sigmaBehav,'Visible','on');
+    set(handles.sigmaEpoch,'Visible','on');
+    
+    set(handles.showExpMean,'Enable','on');
+    set(handles.showExpThresh,'Enable','on');
+    set(handles.showBehaviorMean,'Enable','on');
+    set(handles.showBehaviorThresh,'Enable','on');
+    set(handles.showEpochMean,'Enable','on');
+    set(handles.showEpochThresh,'Enable','on');
+    
+    guidata(hObject, handles);
+    
+    updateRMSdata(handles);
+end
+
+function updateRMSdata(handles)
+
+if ( handles.currIndex <= 0 ) || (handles.actBehavior <=0 ) || (handles.actBehavior >8 ) || ~isfield(handles.spindles_data,'rms_data')
+    return
+end
+
+
+set(handles.miExp,'String',num2str(handles.spindles_data.rms_data.rms_mean_all,3));
+set(handles.miBehav,'String',num2str(handles.spindles_data.rms_data.rms_behavior(handles.actBehavior,1),3));
+set(handles.miEpoch,'String',num2str(handles.spindles_data.rms_data.rms_epoch(handles.spindles_data.behavior{handles.actBehavior}(handles.currIndex)+1,1),3));
+set(handles.sigmaExp,'String',num2str(handles.spindles_data.rms_data.rms_std_all,3));
+set(handles.sigmaBehav,'String',num2str(handles.spindles_data.rms_data.rms_behavior(handles.actBehavior,2),3));
+set(handles.sigmaEpoch,'String',num2str(handles.spindles_data.rms_data.rms_epoch(handles.spindles_data.behavior{handles.actBehavior}(handles.currIndex)+1,2),3));
+
+
+
+function minSpindlesSpan_Callback(hObject, eventdata, handles)
+% hObject    handle to minSpindlesSpan (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of minSpindlesSpan as text
+%        str2double(get(hObject,'String')) returns contents of minSpindlesSpan as a double
+val = str2double(get(hObject,'String'));
+
+if isnan(val)
+    set(handles.status_text,'String','Please insert a valid numeric value for Spindles span');
+    set(hObject,'String','');
+    handles.spindlesSpan = 0;
+    set(handles.spindlesDetect,'Enable','off');
+else
+    set(handles.status_text,'String','Threshold for Spindles span OK');
+    handles.spindlesSpan = abs(val);
+    if (handles.sigmathresh > 0 )
+        set(handles.spindlesDetect,'Enable','on');
+    end 
+    updateGraphs(handles);
+end
+
+guidata(hObject, handles);
+
+% --- Executes during object creation, after setting all properties.
+function minSpindlesSpan_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to minSpindlesSpan (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function spindlesThresh_Callback(hObject, eventdata, handles)
+% hObject    handle to spindlesThresh (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of spindlesThresh as text
+%        str2double(get(hObject,'String')) returns contents of spindlesThresh as a double
+val = str2double(get(hObject,'String'));
+
+if isnan(val)
+    set(handles.status_text,'String','Please insert a valid numeric value for threshold');
+    set(hObject,'String','');
+    handles.sigmathresh = 0;
+    set(handles.spindlesDetect,'Enable','off');
+else
+    set(handles.status_text,'String','Threshold for Spindles detect threshold ok');
+    handles.sigmathresh = abs(val);
+    if (handles.spindlesSpan > 0 )
+        set(handles.spindlesDetect,'Enable','on');
+    end
+    updateGraphs(handles);
+end
+
+guidata(hObject, handles);
+
+% --- Executes during object creation, after setting all properties.
+function spindlesThresh_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to spindlesThresh (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in spindlesDetect.
+function spindlesDetect_Callback(hObject, eventdata, handles)
+% hObject    handle to spindlesDetect (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+ set(handles.spindlesSummary,'String','');
+
+nb = length(handles.spindles_data.behavior);
+handles.spindles_data.spindles_detect = cell(nb,1);
+
+for k1=1:nb
+    
+    str =  get(handles.spindlesSummary,'String');
+    
+    nbx = length(handles.spindles_data.behavior{k1});
+    handles.spindles_data.spindles_detect{k1} = zeros(nbx,3);
+    sig = zeros(1536*nbx,1);
+    for k2=1:length(handles.spindles_data.behavior{k1})
+        actepoch = handles.spindles_data.behavior{k1}(k2);
+        sig(1536*(k2-1)+1:1536*k2) = handles.spindles_data.rms(1536*actepoch + 1:1536*(actepoch+1));
+    end
+    
+    tsig = (sig >= (handles.spindles_data.rms_data.rms_behavior(k1,1) + handles.spindles_data.rms_data.rms_behavior(k1,2)*handles.sigmathresh) );
+    
+    dsig = diff([0;tsig;0]);
+    
+    startIndex = find(dsig > 0);
+    endIndex = find(dsig < 0) -1;
+    tmpDuration = ( endIndex - startIndex + 1 ) / handles.spindles_data.freq;
+    
+    durationIndex = find(tmpDuration >= handles.spindlesSpan);
+    
+    for k3=1:length(durationIndex)
+        startId = (floor(startIndex(k3)/1536) + 1);
+        endId = (floor(endIndex(k3)/1536) + 1);
+        startEpoch = handles.spindles_data.behavior{k1}(startId);
+        endEpoch = handles.spindles_data.behavior{k1}(endId);
+        
+        
+        if (startEpoch == endEpoch)
+            handles.spindles_data.spindles_detect{k1}(startId,1) = handles.spindles_data.spindles_detect{k1}(startId,1) + 1;
+            handles.spindles_data.spindles_detect{k1}(startId,2) = mod(startIndex(k3),1536)/handles.spindles_data.freq;
+            handles.spindles_data.spindles_detect{k1}(startId,3) = mod(endIndex(k3),1536)/handles.spindles_data.freq;
+        elseif ( endEpoch == startEpoch+1 )
+            handles.spindles_data.spindles_detect{k1}(startId,1) = handles.spindles_data.spindles_detect{k1}(startId,1) + 0.5;
+            handles.spindles_data.spindles_detect{k1}(startId,2) = mod(startIndex(k3),1536)/handles.spindles_data.freq;
+            handles.spindles_data.spindles_detect{k1}(startId,3) = 13;
+            handles.spindles_data.spindles_detect{k1}(endId,1) = handles.spindles_data.spindles_detect{k1}(endId,1) + 0.5;
+            handles.spindles_data.spindles_detect{k1}(endId,2) = -1;
+            handles.spindles_data.spindles_detect{k1}(endId,3) = mod(endIndex(k3),1536)/handles.spindles_data.freq;
+        end
+    end
+    
+     set(handles.spindlesSummary,'String',{str,['Behavior ',num2str(k1),' Spindles:',num2str(count(handles.spindles_data.spindles_detect{k1}(1,:)))]});
+    
+end
+
+ guidata(hObject, handles);
+ 
+ 
+
+ 
+
+
+% --- Executes on button press in spindlesShow.
+function spindlesShow_Callback(hObject, eventdata, handles)
+% hObject    handle to spindlesShow (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of spindlesShow
+
+
+% --- Executes on button press in showExpMean.
+function showExpMean_Callback(hObject, eventdata, handles)
+% hObject    handle to showExpMean (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of showExpMean
+updateGraphs(handles);
+
+% --- Executes on button press in showEpochMean.
+function showEpochMean_Callback(hObject, eventdata, handles)
+% hObject    handle to showEpochMean (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of showEpochMean
+updateGraphs(handles);
+
+% --- Executes on button press in showEpochThresh.
+function showEpochThresh_Callback(hObject, eventdata, handles)
+% hObject    handle to showEpochThresh (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of showEpochThresh
+updateGraphs(handles);
+
+% --- Executes on button press in showBehaviorMean.
+function showBehaviorMean_Callback(hObject, eventdata, handles)
+% hObject    handle to showBehaviorMean (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of showBehaviorMean
+updateGraphs(handles);
+
+% --- Executes on button press in showBehaviorThresh.
+function showBehaviorThresh_Callback(hObject, eventdata, handles)
+% hObject    handle to showBehaviorThresh (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of showBehaviorThresh
+updateGraphs(handles);
+
+% --- Executes on button press in showExpThresh.
+function showExpThresh_Callback(hObject, eventdata, handles)
+% hObject    handle to showExpThresh (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of showExpThresh
+updateGraphs(handles);
