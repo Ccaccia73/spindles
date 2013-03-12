@@ -1,5 +1,6 @@
 .dropbox.*
 .gitignore
+.dropbox
 *.asv
 *.pdf
 *.ini

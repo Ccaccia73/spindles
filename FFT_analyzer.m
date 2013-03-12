@@ -68,7 +68,9 @@ handles.ythresh = -1;
 
 handles.fftminscale = 0;
 handles.fftmaxscale = 64;
+
 handles.sigmathresh = 0;
+handles.spindlesSpan = 0;
 
 handles.currIndex = 0;
 
@@ -277,16 +279,19 @@ if mat_file ~= 0
 		
 		if isempty(val)
 			set(handles.filterSelect,'Value',1);
-			set(handles.status_text,'String','No filter in .mat file')
+			set(handles.status_text,'String',{get(handles.status_text,'String');'No filter in .mat file'})
 		else
 			if val >1 && val <12
 				set(handles.filterSelect,'Value',val);
+				set(handles.status_text,'String',{get(handles.status_text,'String');'Filter found'})
 				set(handles.FFTseconds,'Enable','on');
 				set(handles.FFTwindow,'Enable','on');
 				set(handles.calcFFT,'Enable','on');
+				set(handles.MAsamples,'Enable','on');
+				set(handles.RMScalc,'Enable','on');
 			else
 				set(handles.filterSelect,'Value',1);
-				set(handles.status_text,'String','No filter in .mat file')
+				set(handles.status_text,'String',{get(handles.status_text,'String');'No filter in .mat file'})
 			end
 		end
 		
@@ -298,8 +303,74 @@ if mat_file ~= 0
         
         guidata(hObject,handles);
 		
+		% FFT
+		if isfield(handles.spindles_data,'fft_win')
+			set(handles.FFTwindow,'Value',handles.spindles_data.fft_win);
+			set(handles.status_text,'String',[get(handles.status_text,'String');'FFT window found'])
+		else
+			set(handles.status_text,'String',[get(handles.status_text,'String');'NO FFT window found'])
+		end
+		
+		if isfield(handles.spindles_data,'fft_period')
+			periods = cellstr(get(handles.FFTseconds,'String'));
+			set(handles.status_text,'String',[get(handles.status_text,'String');'FFT period found'])
+			val = find(strcmp(num2str(handles.spindles_data.fft_period),periods),1);
+			set(handles.FFTseconds,'Value',val);
+		else
+			set(handles.status_text,'String',[get(handles.status_text,'String');'NO FFT period found'])
+		end
+		
+		% RMS
+		if isfield(handles.spindles_data,'rms_data')
+			set(handles.MAsamples,'Value',find(str2double(strtok(cellstr(get(handles.MAsamples,'String')),'-'))==handles.spindles_data.rms_data.MA,1));
+			set(handles.status_text,'String',[get(handles.status_text,'String');'RMS MA found'])
+			
+			set(handles.miExp,'Visible','on');
+			set(handles.miBehav,'Visible','on');
+			set(handles.miEpoch,'Visible','on');
+			set(handles.sigmaExp,'Visible','on');
+			set(handles.sigmaBehav,'Visible','on');
+			set(handles.sigmaEpoch,'Visible','on');
+			
+			set(handles.showExpMean,'Enable','on');
+			set(handles.showExpThresh,'Enable','on');
+			set(handles.showBehaviorMean,'Enable','on');
+			set(handles.showBehaviorThresh,'Enable','on');
+			set(handles.showEpochMean,'Enable','on');
+			set(handles.showEpochThresh,'Enable','on');
+						
+			updateRMSdata(handles);
+		else
+			set(handles.status_text,'String',[get(handles.status_text,'String');'NO RMS found'])
+		end
+		
+		% Spindles
+		if isfield(handles.spindles_data,'spindles_detect')
+			
+			handles.spindlesSpan = handles.spindles_data.spindles_span;
+			handles.sigmathresh = handles.spindles_data.spindles_thresh;
+			
+			guidata(hObject, handles);
+			
+			set(handles.minSpindlesSpan,'String',num2str(handles.spindles_data.spindles_span))
+			set(handles.spindlesThresh,'String',num2str(handles.spindles_data.spindles_thresh))
+			set(handles.spindlesDetect,'Enable','on')
+			set(handles.status_text,'String',[get(handles.status_text,'String');'Spindles found'])
+			str = { ['REM:      ',num2str(handles.spindles_data.spindles_count(1))];
+					['NREM:     ',num2str(handles.spindles_data.spindles_count(2))];
+					['WAKE:     ',num2str(handles.spindles_data.spindles_count(3))];
+					['4th :     ',num2str(handles.spindles_data.spindles_count(4))];
+					['REM w/a:  ',num2str(handles.spindles_data.spindles_count(5))];
+					['NREM w/a: ',num2str(handles.spindles_data.spindles_count(6))];
+					['WAKE w/a: ',num2str(handles.spindles_data.spindles_count(7))];
+					['4th w/a:  ',num2str(handles.spindles_data.spindles_count(8))]};
+					
+			set(handles.spindlesSummary,'String',str);
+		else
+			set(handles.status_text,'String',[get(handles.status_text,'String');'NO Spindles found'])
+		end
         
-		set(handles.status_text,'String',['File ',fullname,' successfully loaded']);
+		set(handles.status_text,'String',[get(handles.status_text,'String');['File ',fullname,' successfully loaded']]);
 	else
 		set(handles.status_text,'String','Please select a valid Spindles struct file');
 	end
@@ -539,16 +610,6 @@ function matFileSpindles_Callback(hObject, eventdata, handles)
 % Hints: get(hObject,'String') returns contents of matFileSpindles as text
 %        str2double(get(hObject,'String')) returns contents of matFileSpindles as a double
 
-filename = get(handles.matFilename,'String');
-
-if isempty(filename)
-	set(handles.status_text,'String','Please insert a valid name')
-else
-	fullname = strcat(get(handles.dirText,'String'),'/',filename,'.mat');
-	spindles_data = handles.spindles_data;
-	save(fullname,'spindles_data');
-	set(handles.status_text,'String',['Data saved in ',fullname])
-end
 
 
 % --- Executes during object creation, after setting all properties.
@@ -580,6 +641,16 @@ function matSpindlesFilesave_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
+filename = get(handles.matFileSpindles,'String');
+
+if isempty(filename)
+	set(handles.status_text,'String','Please insert a valid name')
+else
+	fullname = strcat(get(handles.dirText,'String'),'/',filename,'.mat');
+	spindles_data = handles.spindles_data;
+	save(fullname,'spindles_data');
+	set(handles.status_text,'String',['Data saved in ',fullname])
+end
 
 
 function [h,m,s]=calcTime(value)
@@ -664,6 +735,42 @@ if (get(handles.threshbox,'Value') && handles.ythresh > 0)
     h2 = line([0 12],[-handles.ythresh -handles.ythresh]);
     set(h1,'Color',[0.5 0.5 0.5],'LineStyle','--');
     set(h2,'Color',[0.5 0.5 0.5],'LineStyle','--');
+end
+
+if isfield(handles.spindles_data,'spindles_detect')
+	if (get(handles.spindlesShow,'Value'))
+		tmpsp = handles.spindles_data.spindles_detect{handles.actBehavior}{handles.currIndex};
+		for k1=1:size(tmpsp,1)
+			leftarrow = false;
+			rightarrow = false;
+			if tmpsp(k1,1) < 0
+				xmin = 0;
+				leftarrow = true;
+			else
+				xmin = tmpsp(k1,1);
+			end
+
+			if tmpsp(k1,2) > 12
+				xmax = 12;
+				rightarrow = true;
+			else
+				xmax = tmpsp(k1,2);
+			end
+			
+			ymax = max(max(filt),abs(min(filt)));
+			ymin = -ymax;
+			
+			rectangle('Position',[xmin ymin xmax-xmin ymax-ymin],'LineWidth',2,'EdgeColor',[1 0 0]);
+						
+			if leftarrow
+				patch([0 0.225 0.225],[0 10 -10],'g','EdgeColor','g')
+			end
+			
+			if rightarrow
+				patch([12 11.775 11.775],[0 10 -10],'g','EdgeColor','g')
+			end
+		end
+	end
 end
 
 
@@ -828,6 +935,9 @@ if(isnan(val))
 	set(handles.status_text,'String','Please select a value for seconds')
 else
     FFTwin = get(handles.FFTwindow,'Value');
+	
+	handles.spindles_data.fft_win = FFTwin;
+	handles.spindles_data.fft_period = val;
     
     handles.spindles_data.rawfft = [];
     handles.spindles_data.filtfft = [];
@@ -1045,6 +1155,7 @@ function RMScalc_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
+
 contents = cellstr(get(handles.MAsamples,'String'));
 tmpstr = strtok(contents{get(handles.MAsamples,'Value')},'-');
 
@@ -1054,13 +1165,17 @@ if isnan(val)
     set(handles.status_text,'String','Please select a valid Moving Average value');
     return
 else
+	set(handles.status_text,'String','Computing RMS...');
+
     if val>1
         bfilt = ones(val,1)/val;
         handles.spindles_data.rms = filter(bfilt,1,sqrt(handles.spindles_data.filtervolt.^2));
     else
         handles.spindles_data.rms = sqrt(handles.spindles_data.filtervolt.^2);
-    end
-        
+	end
+    
+	handles.spindles_data.rms_data.MA = val;
+	
     handles.spindles_data.rms_data.rms_mean_all = mean(handles.spindles_data.rms);
     handles.spindles_data.rms_data.rms_std_all = std(handles.spindles_data.rms);
     
@@ -1110,6 +1225,8 @@ else
     set(handles.showBehaviorThresh,'Enable','on');
     set(handles.showEpochMean,'Enable','on');
     set(handles.showEpochThresh,'Enable','on');
+	
+	set(handles.status_text,'String','RMS data computed');
     
     guidata(hObject, handles);
     
@@ -1217,13 +1334,16 @@ function spindlesDetect_Callback(hObject, eventdata, handles)
 
 set(handles.spindlesSummary,'String','');
 
+set(handles.status_text,'String','Finding Spindles with RMS method...');
+
 nb = length(handles.spindles_data.behavior);
 handles.spindles_data.spindles_detect = cell(nb,1);
+handles.spindles_data.spindles_count = zeros(nb,1);
 
 for k1=1:nb
     
     nbx = length(handles.spindles_data.behavior{k1});
-    handles.spindles_data.spindles_detect{k1} = zeros(nbx,3);
+    handles.spindles_data.spindles_detect{k1} = cell(nbx,1);
     sig = zeros(1536*nbx,1);
     for k2=1:length(handles.spindles_data.behavior{k1})
         actepoch = handles.spindles_data.behavior{k1}(k2);
@@ -1234,38 +1354,60 @@ for k1=1:nb
     
     dsig = diff([0;tsig;0]);
     
+	a = length(dsig);
+	
     startIndex = find(dsig > 0);
     endIndex = find(dsig < 0) -1;
     tmpDuration = ( endIndex - startIndex + 1 ) / handles.spindles_data.freq;
     
     durationIndex = find(tmpDuration >= handles.spindlesSpan);
+
+	numsp = 0;
+
+	for k3=1:length(durationIndex)
+		startId = (floor(startIndex(durationIndex(k3))/1536) + 1);
+		endId = (floor(endIndex(durationIndex(k3))/1536) + 1);
+		startEpoch = handles.spindles_data.behavior{k1}(startId);
+		endEpoch = handles.spindles_data.behavior{k1}(endId);
+		
+		
+		if (startEpoch == endEpoch)
+			numsp = numsp + 1;
+			% handles.spindles_data.spindles_detect{k1}(startId,1) = handles.spindles_data.spindles_detect{k1}(startId,1) + 1;
+			tmpv = [mod(startIndex(durationIndex(k3)),1536)/handles.spindles_data.freq mod(endIndex(durationIndex(k3)),1536)/handles.spindles_data.freq];
+			handles.spindles_data.spindles_detect{k1}{startId} = [handles.spindles_data.spindles_detect{k1}{startId};tmpv];
+		elseif ( endEpoch == startEpoch+1 )
+			numsp = numsp + 1;
+			% handles.spindles_data.spindles_detect{k1}(startId,1) = handles.spindles_data.spindles_detect{k1}(startId,1) + 0.5;
+			tmpv = [mod(startIndex(durationIndex(k3)),1536)/handles.spindles_data.freq 13];
+			handles.spindles_data.spindles_detect{k1}{startId} = [handles.spindles_data.spindles_detect{k1}{startId};tmpv];
+			% handles.spindles_data.spindles_detect{k1}(endId,1) = handles.spindles_data.spindles_detect{k1}(endId,1) + 0.5;
+			tmpv = [-1 mod(endIndex(durationIndex(k3)),1536)/handles.spindles_data.freq];
+			handles.spindles_data.spindles_detect{k1}{endId} = [handles.spindles_data.spindles_detect{k1}{endId};tmpv];
+		end
+	end
     
-    for k3=1:length(durationIndex)
-        startId = (floor(startIndex(k3)/1536) + 1);
-        endId = (floor(endIndex(k3)/1536) + 1);
-        startEpoch = handles.spindles_data.behavior{k1}(startId);
-        endEpoch = handles.spindles_data.behavior{k1}(endId);
-        
-        
-        if (startEpoch == endEpoch)
-            handles.spindles_data.spindles_detect{k1}(startId,1) = handles.spindles_data.spindles_detect{k1}(startId,1) + 1;
-            handles.spindles_data.spindles_detect{k1}(startId,2) = mod(startIndex(k3),1536)/handles.spindles_data.freq;
-            handles.spindles_data.spindles_detect{k1}(startId,3) = mod(endIndex(k3),1536)/handles.spindles_data.freq;
-        elseif ( endEpoch == startEpoch+1 )
-            handles.spindles_data.spindles_detect{k1}(startId,1) = handles.spindles_data.spindles_detect{k1}(startId,1) + 0.5;
-            handles.spindles_data.spindles_detect{k1}(startId,2) = mod(startIndex(k3),1536)/handles.spindles_data.freq;
-            handles.spindles_data.spindles_detect{k1}(startId,3) = 13;
-            handles.spindles_data.spindles_detect{k1}(endId,1) = handles.spindles_data.spindles_detect{k1}(endId,1) + 0.5;
-            handles.spindles_data.spindles_detect{k1}(endId,2) = -1;
-            handles.spindles_data.spindles_detect{k1}(endId,3) = mod(endIndex(k3),1536)/handles.spindles_data.freq;
-        end
-    end
-    
-    set(handles.spindlesSummary,'String',[get(handles.spindlesSummary,'String');{[num2str(k1),') Sp:',num2str(sum(handles.spindles_data.spindles_detect{k1}(:,1)))]}]);
+	handles.spindles_data.spindles_count(k1) = numsp;
     
 end
 
- guidata(hObject, handles);
+set(handles.status_text,'String','Spindles detection completed');
+
+str = { ['REM:      ',num2str(handles.spindles_data.spindles_count(1))];
+		['NREM:     ',num2str(handles.spindles_data.spindles_count(2))];
+		['WAKE:     ',num2str(handles.spindles_data.spindles_count(3))];
+		['4th :     ',num2str(handles.spindles_data.spindles_count(4))];
+		['REM w/a:  ',num2str(handles.spindles_data.spindles_count(5))];
+		['NREM w/a: ',num2str(handles.spindles_data.spindles_count(6))];
+		['WAKE w/a: ',num2str(handles.spindles_data.spindles_count(7))];
+		['4th w/a:  ',num2str(handles.spindles_data.spindles_count(8))]};
+		
+set(handles.spindlesSummary,'String',str);
+
+handles.spindles_data.spindles_span = handles.spindlesSpan;
+handles.spindles_data.spindles_thresh = handles.sigmathresh;
+
+guidata(hObject, handles);
  
  
 
@@ -1279,6 +1421,7 @@ function spindlesShow_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 % Hint: get(hObject,'Value') returns toggle state of spindlesShow
+updateGraphs(handles);
 
 
 % --- Executes on button press in showExpMean.
